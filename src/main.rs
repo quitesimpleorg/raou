@@ -270,7 +270,8 @@ fn create_execv_args(entry : & Entry, cmdargs : &Vec<String>) -> Vec<* const lib
     }
     else
     {
-        args.insert(0, to_cstring(&entry.cmd));
+        let cmdbegin = &entry.cmd.rfind("/").unwrap() + 1;
+        args.insert(0, to_cstring(&entry.cmd.split_at(cmdbegin).1));
     }
     args.push(std::ptr::null());
     return args;
