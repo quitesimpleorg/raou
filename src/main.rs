@@ -52,6 +52,7 @@ struct Passwd
     pw_shell : String,
 }
 
+
 fn initgroups(user : &str, group : libc::gid_t) -> std::io::Result<()>
 {
     let userarg = CString::new(user);
@@ -262,7 +263,7 @@ fn create_execv_args(entry : & Entry, cmdargs : &Vec<String>) -> Vec<* const lib
     }
     else
     {
-        args = (&entry.args).split_whitespace().map(to_cstring).collect();
+        args = entry.args.as_str().split_whitespace().map(to_cstring).collect();
     }
     if ! &entry.argv0.is_empty()
     {
@@ -281,6 +282,9 @@ fn exec(entryname : &str, cmdargs : &Vec<String>) -> std::io::Result<()>
     let mut filepath : String = String::from("/etc/raou.d/");
     filepath = filepath + entryname;
 
+    if ! std::path::Path::new(&filepath).exists() {
+        return Err(std::io::Error::new(ErrorKind::NotFound, "The entry ".to_owned() + &filepath + " does not exist"));
+    }
     let entry : Entry = create_entry_from_file(&filepath)?;
     let destuserpasswd : Passwd = getpwnam(&entry.dest_user)?;
     let currentuser : u32 = geteuid();
@@ -291,14 +295,13 @@ fn exec(entryname : &str, cmdargs : &Vec<String>) -> std::io::Result<()>
 
 
     ensure_allowed(currentuser, &entry)?;
-    become_user(&destuserpasswd)?;
-    setup_environment(&destuserpasswd, &entry.inherit_envs)?;
-    init_sandbox(&entry)?;
+    become_user(&destuserpasswd).or_else(|e| return Err(Error::new(ErrorKind::PermissionDenied, "Failed to switch user: ".to_owned() + &e.to_string())))?;
+    setup_environment(&destuserpasswd, &entry.inherit_envs).or_else(|e| return Err(Error::new(ErrorKind::Other, "Environment setup failure: ".to_owned() + &e.to_string())))?;
+    init_sandbox(&entry).or_else(|e| return Err(Error::new(ErrorKind::Other, "Sandbox init failure: ".to_owned() + &e.to_string())))?;
 
-    unsafe
-        {
-            errnowrapper(libc::execv(to_cstring(entry.cmd), args.as_ptr()))?;
-        }
+    unsafe   {
+        errnowrapper(libc::execv(to_cstring(entry.cmd), args.as_ptr())).or_else(|e| return Err(Error::new(ErrorKind::Other, "execv failed: ".to_owned() + &e.to_string())))?;
+    }
     std::process::exit(0);
     Ok(())
 }
@@ -308,6 +311,7 @@ fn main() -> Result<(), std::io::Error> {
     let cmdargs : Vec<String> = argv.collect();
     let entryname = cmdargs.get(1);
     if entryname.is_some() {
+
        match  exec(&entryname.unwrap(), &cmdargs) {
            Err(e) => {
                eprintln!("The following error ocurred:");
