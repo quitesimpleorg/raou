@@ -1,10 +1,10 @@
 use std::env::Args;
-use std::io::{Error, ErrorKind};
-use std::fs::File;
-use std::io::BufReader;
-use std::io::BufRead;
-use std::ffi::CString;
 use std::ffi::CStr;
+use std::ffi::CString;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::{Error, ErrorKind};
 
 extern crate libc;
 use libc::passwd;
@@ -35,7 +35,6 @@ impl Entry {
     }
 }
 
-
 struct Passwd {
     pw_name: String,
     pw_passwd: String,
@@ -46,14 +45,10 @@ struct Passwd {
     pw_shell: String,
 }
 
-
 fn initgroups(user: &str, group: libc::gid_t) -> std::io::Result<()> {
     let userarg = CString::new(user);
-    return errnowrapper(unsafe {
-        libc::initgroups(userarg.unwrap().as_ptr(), group)
-    });
+    return errnowrapper(unsafe { libc::initgroups(userarg.unwrap().as_ptr(), group) });
 }
-
 
 fn errnowrapper(ret: libc::c_int) -> std::io::Result<()> {
     if ret != 0 {
@@ -95,7 +90,6 @@ fn getpwnam(username: &str) -> std::io::Result<Passwd> {
             pw_shell: getstr((*pwnamresult).pw_shell),
         })
     }
-
 }
 
 fn ensure_allowed(userid: libc::uid_t, entry: &Entry) -> std::io::Result<()> {
@@ -119,7 +113,6 @@ fn ensure_allowed(userid: libc::uid_t, entry: &Entry) -> std::io::Result<()> {
     ));
 }
 
-
 fn usage() {
     println!("Usage: raou ENRTYNAME");
 }
@@ -141,13 +134,12 @@ fn assign(entry: &mut Entry, key: &str, value: &str) {
         "env_vars" => add_multi(&mut entry.inherit_envs, val),
         "argv0" => entry.argv0 = val,
         "target_user" => entry.dest_user = val,
-        "allow_args" => entry.arbitrary_args = (val == "1" || val == "true"),
+        "allow_args" => entry.arbitrary_args = val == "1" || val == "true",
         "args" => entry.args = val,
-        "no_new_privs" => entry.no_new_privs = (val == "1" || val == "true"),
+        "no_new_privs" => entry.no_new_privs = val == "1" || val == "true",
         _ => {
             eprintln!("Ignoring invalid key {}", key);
         }
-
     }
 }
 fn assign_from_line(entry: &mut Entry, line: &str) {
@@ -159,7 +151,6 @@ fn assign_from_line(entry: &mut Entry, line: &str) {
         return;
     }
     assign(entry, key.unwrap(), value.unwrap())
-
 }
 fn create_entry_from_file(filepath: &str) -> std::io::Result<Entry> {
     let mut entry: Entry = Entry::new();
@@ -179,7 +170,8 @@ fn clearenv() -> std::io::Result<()> {
 }
 //TODO: AsRef for envs?
 fn setup_environment(passwd: &Passwd, envs: &[String]) -> std::io::Result<()> {
-    let saved_envs: Vec<String> = envs.iter()
+    let saved_envs: Vec<String> = envs
+        .iter()
         .map(|s| std::env::var(s).expect("No such var"))
         .collect();
     clearenv()?;
@@ -194,7 +186,6 @@ fn setup_environment(passwd: &Passwd, envs: &[String]) -> std::io::Result<()> {
         std::env::set_var(&envs[i], item);
     }
     Ok(())
-
 }
 
 fn become_user(passwd: &Passwd) -> std::io::Result<()> {
@@ -204,13 +195,12 @@ fn become_user(passwd: &Passwd) -> std::io::Result<()> {
     std::env::set_current_dir(&passwd.pw_dir)?;
     Ok(())
 }
-fn init_sandbox(entry: &Entry) -> std::io::Result<()> {
-    if (entry.no_new_privs) {
-        errnowrapper(unsafe {
-            libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)
-        })?;
-    }
 
+fn drop_privs(entry: &Entry) -> std::io::Result<()> {
+    if entry.no_new_privs {
+        errnowrapper(unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0) })?;
+        errnowrapper(unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) })?;
+    }
     Ok(())
 }
 
@@ -220,8 +210,6 @@ fn to_cstring<T: AsRef<str>>(s: T) -> *const libc::c_char {
 }
 
 fn create_execv_args(entry: &Entry, cmdargs: &Vec<String>) -> Vec<*const libc::c_char> {
-
-
     let mut args: Vec<*const libc::c_char>;
     if entry.arbitrary_args && cmdargs.len() > 2 {
         args = cmdargs.iter().skip(2).map(to_cstring).collect();
@@ -256,10 +244,7 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
     let destuserpasswd: Passwd = getpwnam(&entry.dest_user)?;
     let currentuser: u32 = geteuid();
 
-
     let args = create_execv_args(&entry, &cmdargs);
-
-
 
     ensure_allowed(currentuser, &entry)?;
     become_user(&destuserpasswd).or_else(|e| {
@@ -268,39 +253,35 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
             "Failed to switch user: ".to_owned() + &e.to_string(),
         ));
     })?;
-    setup_environment(&destuserpasswd, &entry.inherit_envs)
-        .or_else(|e| {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Environment setup failure: ".to_owned() + &e.to_string(),
-            ));
-        })?;
-    init_sandbox(&entry).or_else(|e| {
+    setup_environment(&destuserpasswd, &entry.inherit_envs).or_else(|e| {
         return Err(Error::new(
             ErrorKind::Other,
-            "Sandbox init failure: ".to_owned() + &e.to_string(),
+            "Environment setup failure: ".to_owned() + &e.to_string(),
+        ));
+    })?;
+
+    drop_privs(&entry).or_else(|e| {
+        return Err(Error::new(
+            ErrorKind::Other,
+            "Failed to drop priviliges: ".to_owned() + &e.to_string(),
         ));
     })?;
 
     unsafe {
-        errnowrapper(libc::execv(to_cstring(entry.cmd), args.as_ptr()))
-            .or_else(|e| {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "execv failed: ".to_owned() + &e.to_string(),
-                ));
-            })?;
+        errnowrapper(libc::execv(to_cstring(entry.cmd), args.as_ptr())).or_else(|e| {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "execv failed: ".to_owned() + &e.to_string(),
+            ));
+        })?;
     }
     std::process::exit(0);
-    Ok(())
 }
 fn main() -> Result<(), std::io::Error> {
-
     let argv: Args = std::env::args();
     let cmdargs: Vec<String> = argv.collect();
     let entryname = cmdargs.get(1);
     if entryname.is_some() {
-
         match exec(&entryname.unwrap(), &cmdargs) {
             Err(e) => {
                 eprintln!("The following error ocurred:");
