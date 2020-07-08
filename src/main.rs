@@ -75,11 +75,13 @@ fn getpwnam(username: &str) -> std::io::Result<Passwd> {
     fn getstr(str: *mut libc::c_char) -> String {
         unsafe { CStr::from_ptr(str).to_string_lossy().into_owned() }
     }
-    unsafe {
-        let pwnamresult: *mut passwd = libc::getpwnam(CString::new(username).unwrap().as_ptr());
+        let username_c = CString::new(username).unwrap();
+        let username_ptr = username_c.as_ptr();
+        let pwnamresult: *mut libc::passwd = unsafe { libc::getpwnam(username_ptr) };
         if pwnamresult.is_null() {
-            return Err(Error::last_os_error());
+            return Err(Error::new(Error::last_os_error().kind(),"Lookup of user failed: ".to_owned() + &Error::last_os_error().to_string()));
         }
+    unsafe {
         Ok(Passwd {
             pw_name: getstr((*pwnamresult).pw_name),
             pw_passwd: getstr((*pwnamresult).pw_passwd),
