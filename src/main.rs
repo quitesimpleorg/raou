@@ -82,6 +82,12 @@ fn getpwnam(username: &str) -> std::io::Result<Passwd> {
     let username_ptr = username_c.as_ptr();
     let pwnamresult: *mut libc::passwd = unsafe { libc::getpwnam(username_ptr) };
     if pwnamresult.is_null() {
+        if Error::last_os_error().raw_os_error().unwrap() == 0 {
+            return Err(Error::new(
+                ErrorKind::NotFound,
+                format!("The username '{}' was not found", username),
+            ));
+        }
         return Err(Error::new(
             Error::last_os_error().kind(),
             "Lookup of user failed: ".to_owned() +
