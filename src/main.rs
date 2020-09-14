@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::{Error, ErrorKind};
+use std::fs;
 
 extern crate libc;
 use libc::passwd;
@@ -240,9 +241,16 @@ fn create_execv_args(entry: &Entry, cmdargs: &Vec<String>) -> Vec<*const libc::c
     return args;
 }
 fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
-    let mut filepath: String = String::from("/etc/raou.d/");
-    filepath = filepath + entryname;
+    let basedir: String = String::from("/etc/raou.d/");
+    let filepath: String = basedir.to_string() + entryname;
 
+    let realpath = fs::canonicalize(&filepath)?;
+    if !realpath.starts_with(basedir) {
+        return Err(std::io::Error::new(
+            ErrorKind::InvalidInput,
+            "Specified entry is outside base directory",
+        ));
+    }
     if !std::path::Path::new(&filepath).exists() {
         return Err(std::io::Error::new(
             ErrorKind::NotFound,
