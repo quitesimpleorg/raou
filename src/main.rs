@@ -47,7 +47,9 @@ struct Passwd {
 
 fn initgroups(user: &str, group: libc::gid_t) -> std::io::Result<()> {
     let userarg = CString::new(user);
-    return errnowrapper(unsafe { libc::initgroups(userarg.unwrap().as_ptr(), group) });
+    return errnowrapper(unsafe {
+        libc::initgroups(userarg.unwrap().as_ptr(), group)
+    });
 }
 
 fn errnowrapper(ret: libc::c_int) -> std::io::Result<()> {
@@ -75,12 +77,16 @@ fn getpwnam(username: &str) -> std::io::Result<Passwd> {
     fn getstr(str: *mut libc::c_char) -> String {
         unsafe { CStr::from_ptr(str).to_string_lossy().into_owned() }
     }
-        let username_c = CString::new(username).unwrap();
-        let username_ptr = username_c.as_ptr();
-        let pwnamresult: *mut libc::passwd = unsafe { libc::getpwnam(username_ptr) };
-        if pwnamresult.is_null() {
-            return Err(Error::new(Error::last_os_error().kind(),"Lookup of user failed: ".to_owned() + &Error::last_os_error().to_string()));
-        }
+    let username_c = CString::new(username).unwrap();
+    let username_ptr = username_c.as_ptr();
+    let pwnamresult: *mut libc::passwd = unsafe { libc::getpwnam(username_ptr) };
+    if pwnamresult.is_null() {
+        return Err(Error::new(
+            Error::last_os_error().kind(),
+            "Lookup of user failed: ".to_owned() +
+                &Error::last_os_error().to_string(),
+        ));
+    }
     unsafe {
         Ok(Passwd {
             pw_name: getstr((*pwnamresult).pw_name),
@@ -172,8 +178,7 @@ fn clearenv() -> std::io::Result<()> {
 }
 //TODO: AsRef for envs?
 fn setup_environment(passwd: &Passwd, envs: &[String]) -> std::io::Result<()> {
-    let saved_envs: Vec<String> = envs
-        .iter()
+    let saved_envs: Vec<String> = envs.iter()
         .map(|s| std::env::var(s).expect("No such var"))
         .collect();
     clearenv()?;
@@ -201,7 +206,9 @@ fn become_user(passwd: &Passwd) -> std::io::Result<()> {
 fn drop_privs(entry: &Entry) -> std::io::Result<()> {
     if entry.no_new_privs {
         errnowrapper(unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0) })?;
-        errnowrapper(unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) })?;
+        errnowrapper(unsafe {
+            libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)
+        })?;
     }
     Ok(())
 }
@@ -255,12 +262,13 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
             "Failed to switch user: ".to_owned() + &e.to_string(),
         ));
     })?;
-    setup_environment(&destuserpasswd, &entry.inherit_envs).or_else(|e| {
-        return Err(Error::new(
-            ErrorKind::Other,
-            "Environment setup failure: ".to_owned() + &e.to_string(),
-        ));
-    })?;
+    setup_environment(&destuserpasswd, &entry.inherit_envs)
+        .or_else(|e| {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Environment setup failure: ".to_owned() + &e.to_string(),
+            ));
+        })?;
 
     drop_privs(&entry).or_else(|e| {
         return Err(Error::new(
@@ -270,12 +278,13 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
     })?;
 
     unsafe {
-        errnowrapper(libc::execv(to_cstring(entry.cmd), args.as_ptr())).or_else(|e| {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "execv failed: ".to_owned() + &e.to_string(),
-            ));
-        })?;
+        errnowrapper(libc::execv(to_cstring(entry.cmd), args.as_ptr()))
+            .or_else(|e| {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "execv failed: ".to_owned() + &e.to_string(),
+                ));
+            })?;
     }
     std::process::exit(0);
 }
