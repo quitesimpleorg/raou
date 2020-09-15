@@ -90,8 +90,11 @@ fn getpwnam(username: &str) -> std::io::Result<Passwd> {
         }
         return Err(Error::new(
             Error::last_os_error().kind(),
-            "Lookup of user failed: ".to_owned() +
-                &Error::last_os_error().to_string(),
+            format!(
+                "Lookup of user {} failed: {}",
+                username,
+                &Error::last_os_error().to_string()
+            ),
         ));
     }
     unsafe {
@@ -260,7 +263,7 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
     if !std::path::Path::new(&filepath).exists() {
         return Err(std::io::Error::new(
             ErrorKind::NotFound,
-            "The entry ".to_owned() + &filepath + " does not exist",
+            format!("The entry {} does not exist", filepath),
         ));
     }
     let entry: Entry = create_entry_from_file(&filepath)?;
@@ -273,21 +276,21 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
     become_user(&destuserpasswd).or_else(|e| {
         return Err(Error::new(
             ErrorKind::PermissionDenied,
-            "Failed to switch user: ".to_owned() + &e.to_string(),
+            format!("Failed to switch user: {}", &e.to_string()),
         ));
     })?;
     setup_environment(&destuserpasswd, &entry.inherit_envs)
         .or_else(|e| {
             return Err(Error::new(
                 ErrorKind::Other,
-                "Environment setup failure: ".to_owned() + &e.to_string(),
+                format!("Environment setup failure: {}", &e.to_string()),
             ));
         })?;
 
     drop_privs(&entry).or_else(|e| {
         return Err(Error::new(
             ErrorKind::Other,
-            "Failed to drop priviliges: ".to_owned() + &e.to_string(),
+            format!("Failed to drop priviliges: {}", &e.to_string()),
         ));
     })?;
 
@@ -296,7 +299,7 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
             .or_else(|e| {
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "execv failed: ".to_owned() + &e.to_string(),
+                    format!("execv failed: {}", &e.to_string()),
                 ));
             })?;
     }
