@@ -262,7 +262,7 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
                     "Specified entry is outside base directory",
                 ));
             }
-            if ! p.is_file() {
+            if !p.is_file() {
                 return Err(std::io::Error::new(
                     ErrorKind::Other,
                     "Error: Entry not a file",
@@ -324,7 +324,12 @@ fn main() -> Result<(), std::io::Error> {
     let cmdargs: Vec<String> = argv.collect();
     let entryname = cmdargs.get(1);
     if entryname.is_some() {
-        match exec(&entryname.unwrap(), &cmdargs) {
+        let entry = entryname.unwrap();
+        if !entry.chars().all(|c| c.is_alphanumeric() || c == '.') {
+            eprintln!("Entry names can only contain alphanumeric characters and dots");
+            std::process::exit(1);
+        }
+        match exec(entry, &cmdargs) {
             Err(e) => {
                 eprintln!("The following error ocurred:");
                 eprintln!("{}", e);
