@@ -262,6 +262,12 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
                     "Specified entry is outside base directory",
                 ));
             }
+            if ! p.is_file() {
+                return Err(std::io::Error::new(
+                    ErrorKind::Other,
+                    "Error: Entry not a file",
+                ));
+            }
         }
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
