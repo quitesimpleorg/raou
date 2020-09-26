@@ -253,18 +253,26 @@ fn exec(entryname: &str, cmdargs: &Vec<String>) -> std::io::Result<()> {
     let basedir: String = String::from("/etc/raou.d/");
     let filepath: String = basedir.to_string() + entryname;
 
-    let realpath = fs::canonicalize(&filepath)?;
-    if !realpath.starts_with(basedir) {
-        return Err(std::io::Error::new(
-            ErrorKind::InvalidInput,
-            "Specified entry is outside base directory",
-        ));
-    }
-    if !std::path::Path::new(&filepath).exists() {
-        return Err(std::io::Error::new(
-            ErrorKind::NotFound,
-            format!("The entry {} does not exist", filepath),
-        ));
+    let realpath = fs::canonicalize(&filepath);
+    match realpath {
+        Ok(p) => {
+            if !p.starts_with(basedir) {
+                return Err(std::io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "Specified entry is outside base directory",
+                ));
+            }
+        }
+        Err(e) => {
+            if e.kind() == ErrorKind::NotFound {
+                return Err(std::io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("The entry {} does not exist", entryname),
+                ));
+            } else {
+                return Err(e);
+            }
+        }
     }
     let entry: Entry = create_entry_from_file(&filepath)?;
     let destuserpasswd: Passwd = getpwnam(&entry.dest_user)?;
